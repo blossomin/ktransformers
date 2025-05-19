@@ -23,8 +23,8 @@ n_routed_experts = 8
 layer_num = 10
 qlen = 1024
 CPUInfer = cpuinfer_ext.CPUInfer(65)
-warm_up_iter = 100
-test_iter = 100
+warm_up_iter = 10
+test_iter = 20
 
 def bench_moe(quant_mode: str):
     with torch.inference_mode(mode=True):

@@ -23,7 +23,7 @@ qlen = 1
 warm_up_iter = 1000
 test_iter = 10000
 
-def bench_linear(quant_mode: str):
+def bench_linear(quant_mode: str, device: str):
     with torch.inference_mode(mode=True):
         if quant_mode == "fp32":
             proj_type = torch.float32
@@ -42,15 +42,16 @@ def bench_linear(quant_mode: str):
 
         projs = []
         for _ in range(layer_num):
-            proj = torch.randn((output_size, input_size), dtype = torch.float32, device = "cuda").to("cpu").contiguous()
+            proj = torch.randn((output_size, input_size), dtype = torch.float32, device = "cuda").to(device).contiguous()
             if quant_mode == "qint8":
                 proj_q = torch.quantize_per_tensor(proj, scale, zero_point, torch.qint8)
                 quantized_layer = nnq.Linear(input_size, output_size)
                 quantized_layer.set_weight_bias(proj_q, None)
+                quantized_layer.to(device)
                 projs.append(quantized_layer)
             else:
                 projs.append(proj.to(proj_type))
-        input = torch.randn((layer_num, qlen, input_size), dtype=torch.bfloat16, device = "cuda").to("cpu").contiguous()
+        input = torch.randn((layer_num, qlen, input_size), dtype=torch.bfloat16, device = "cuda").to(device).contiguous()
 
         # warm up
         for i in range(warm_up_iter):
@@ -70,14 +71,20 @@ def bench_linear(quant_mode: str):
                 t_output = torch.mm(input[i % layer_num].to(proj_type), projs[i % layer_num].t())
         end = time.perf_counter()
         total_time = end - start
-        print('Quant mode: ', quant_mode)
-        print('Time(s): ', total_time)
-        print('Iteration: ', test_iter) 
-        print('Time(us) per iteration: ', total_time / test_iter * 1000000)
+        print("device: ", device, end=";")
+        print('Quant mode: ', quant_mode, end=";")
+        print('Time(s): ', total_time, end=";")
+        print('Iteration: ', test_iter, end=";") 
+        print('Time(us) per iteration: ', total_time / test_iter * 1000000, end=";")
         print('Bandwidth: ', input_size * output_size * bytes_per_elem * test_iter / total_time / 1000 / 1000 / 1000, 'GB/s')
         print('')
 
-bench_linear("fp32")
-bench_linear("fp16")
-bench_linear("bf16")
-bench_linear("qint8")
+bench_linear("fp32", "cpu")
+bench_linear("fp16", "cpu")
+bench_linear("bf16", "cpu")
+bench_linear("qint8", "cpu")
+
+bench_linear("fp32", "cuda")
+bench_linear("fp16", "cuda")
+bench_linear("bf16", "cuda")
+# bench_linear("qint8", "cuda")

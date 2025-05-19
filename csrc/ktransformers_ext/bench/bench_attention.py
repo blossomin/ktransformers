@@ -150,10 +150,11 @@ def bench_linear(cache_seqlen: int):
             CPUInfer.sync()
         end = time.perf_counter()
         total_time = end - start
-        print("cache sequence length: ", cache_seqlen)
-        print("Time(s): ", total_time)
-        print("Iteration: ", test_iter)
-        print("Time(us) per iteration: ", total_time / test_iter * 1000000)
+        print("device: ", "cpu", end=";")
+        print("cache sequence length: ", cache_seqlen, end=";")
+        print("Time(s): ", total_time, end=";")
+        print("Iteration: ", test_iter, end=";")
+        print("Time(us) per iteration: ", total_time / test_iter * 1000000, end=";")
         print(
             "Bandwidth: ",
             cache_seqlen
@@ -172,7 +173,10 @@ def bench_linear(cache_seqlen: int):
 
 
 bench_linear(1024)
+bench_linear(2048)
 bench_linear(4096)
+bench_linear(8192)
 bench_linear(16384)
 bench_linear(32768)
 bench_linear(65536)
+bench_linear(131072)
