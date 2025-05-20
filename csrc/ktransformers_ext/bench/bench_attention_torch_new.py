@@ -15,7 +15,7 @@ import time
 # sys.path.append(os.path.dirname(__file__) + "/../build")
 # import cpuinfer_ext
 import torch
-import intel_extension_for_pytorch as ipex
+# import intel_extension_for_pytorch as ipex
 
 
 batch_size = 16
