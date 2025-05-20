@@ -129,10 +129,11 @@ def bench_mlp(quant_mode: str):
             CPUInfer.sync()
         end = time.perf_counter()
         total_time = end - start
-        print('Quant mode: ', quant_mode)
-        print('Time(s): ', total_time)
-        print('Iteration: ', test_iter) 
-        print('Time(us) per iteration: ', total_time / test_iter * 1000000)
+        print("device: ", "cpu", end=";")
+        print('Quant mode: ', quant_mode, end=";")
+        print('Time(s): ', total_time, end=";")
+        print('Iteration: ', test_iter, end=";") 
+        print('Time(us) per iteration: ', total_time / test_iter * 1000000, end=";")
         print('Bandwidth: ', hidden_size * intermediate_size * 3 * bytes_per_elem * test_iter / total_time / 1000 / 1000 / 1000, 'GB/s')
         print('')
 

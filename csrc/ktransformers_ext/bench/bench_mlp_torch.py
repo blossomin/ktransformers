@@ -44,7 +44,7 @@ def mlp_torch(input, gate_proj, up_proj, down_proj):
         ret = torch.mm(intermediate.to(down_proj.dtype), down_proj.t())
     return ret
 
-def bench_mlp(quant_mode: str):
+def bench_mlp(quant_mode: str, device: str):
     with torch.inference_mode(mode=True):
         if quant_mode == "fp32":
             proj_type = torch.float32
@@ -65,9 +65,9 @@ def bench_mlp(quant_mode: str):
         up_projs = []
         down_projs = []
         for _ in range(layer_num):
-            gate_proj = torch.randn((intermediate_size, hidden_size), dtype=torch.float32, device = "cuda").to("cpu").contiguous()
-            up_proj = torch.randn((intermediate_size, hidden_size), dtype=torch.float32, device = "cuda").to("cpu").contiguous()
-            down_proj = torch.randn((hidden_size, intermediate_size), dtype=torch.float32, device = "cuda").to("cpu").contiguous()
+            gate_proj = torch.randn((intermediate_size, hidden_size), dtype=torch.float32, device=device).contiguous()
+            up_proj = torch.randn((intermediate_size, hidden_size), dtype=torch.float32, device=device).contiguous()
+            down_proj = torch.randn((hidden_size, intermediate_size), dtype=torch.float32, device=device).contiguous()
             if quant_mode == "qint8":
                 gate_proj_q = torch.quantize_per_tensor(gate_proj, scale, zero_point, torch.qint8)
                 quantized_gate = nnq.Linear(hidden_size, intermediate_size)
@@ -78,6 +78,9 @@ def bench_mlp(quant_mode: str):
                 down_proj_q = torch.quantize_per_tensor(down_proj, scale, zero_point, torch.qint8)
                 quantized_down = nnq.Linear(intermediate_size, hidden_size)
                 quantized_down.set_weight_bias(down_proj_q, None)
+                quantized_gate.to(device)
+                quantized_up.to(device)
+                quantized_down.to(device)
                 gate_projs.append(quantized_gate)
                 up_projs.append(quantized_up)
                 down_projs.append(quantized_down)
@@ -85,7 +88,7 @@ def bench_mlp(quant_mode: str):
                 gate_projs.append(gate_proj.to(proj_type))
                 up_projs.append(up_proj.to(proj_type))
                 down_projs.append(down_proj.to(proj_type))
-        input = torch.randn((layer_num, qlen, hidden_size), dtype=torch.bfloat16, device = "cuda").to("cpu").contiguous()
+        input = torch.randn((layer_num, qlen, hidden_size), dtype=torch.bfloat16, device = device).contiguous()
 
         # warm up
         for i in range(warm_up_iter):
@@ -97,14 +100,19 @@ def bench_mlp(quant_mode: str):
             mlp_torch(input[i % layer_num], gate_projs[i % layer_num], up_projs[i % layer_num], down_projs[i % layer_num])
         end = time.perf_counter()
         total_time = end - start
-        print('Quant mode: ', quant_mode)
-        print('Time(s): ', total_time)
-        print('Iteration: ', test_iter) 
-        print('Time(us) per iteration: ', total_time / test_iter * 1000000)
+        print("device: ", device, end=";")
+        print('Quant mode: ', quant_mode, end=";")
+        print('Time(s): ', total_time, end=";")
+        print('Iteration: ', test_iter, end=";") 
+        print('Time(us) per iteration: ', total_time / test_iter * 1000000, end=";")
         print('Bandwidth: ', hidden_size * intermediate_size * 3 * bytes_per_elem * test_iter / total_time / 1000 / 1000 / 1000, 'GB/s')
         print('')
 
-bench_mlp("fp32")
-bench_mlp("fp16")
-bench_mlp("bf16")
-bench_mlp("qint8")
+bench_mlp("fp32", "cpu")
+bench_mlp("fp16", "cpu")
+bench_mlp("bf16", "cpu")
+bench_mlp("qint8", "cpu")
+
+bench_mlp("fp32", "cuda")
+bench_mlp("fp16", "cuda")
+bench_mlp("bf16", "cuda")

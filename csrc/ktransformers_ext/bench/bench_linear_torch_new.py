@@ -36,27 +36,35 @@ class simple_linear(torch.nn.Module):
         self.device = device
         for _ in range(layer_num):
             if quant_mode == "qint8":
-                proj = torch.randn((output_size, input_size), dtype = torch.float32, device = "cuda").to(self.device).contiguous()
+                proj = torch.randn((output_size, input_size), dtype = torch.float32, device = device).contiguous()
                 proj_q = torch.quantize_per_tensor(proj, scale, zero_point, torch.qint8)
                 quantized_layer = nnq.Linear(input_size, output_size)
                 quantized_layer.set_weight_bias(proj_q, None)
                 quantized_layer.to(device)
                 self.projs.append(quantized_layer)
             else:
-                proj = torch.randn((output_size, input_size), dtype = self.proj_type, device = "cuda").to(self.device).contiguous()
-                layer = torch.nn.Linear(input_size, output_size, dtype = self.proj_type, device = self.device)
+                proj = torch.randn((output_size, input_size), dtype = self.proj_type, device = device).contiguous()
+                layer = torch.nn.Linear(input_size, output_size, dtype = self.proj_type, device = device)
                 with torch.no_grad():
                     layer.weight.copy_(proj)
                 self.projs.append(layer)
 
     def forward(self, input):
+        t_output = None
         for i in range(self.layer_num):
             if self.quant_mode == "qint8":
                 input_q = torch.quantize_per_tensor(input[i].to(torch.float32), scale, zero_point, torch.quint8)
-                t_output = self.projs[i](input_q)
+                if t_output is None:
+                    t_output = self.projs[i](input_q)
+                else:
+                    t_output += self.projs[i](input_q)
             else:
-                print(f"device of proj: {self.projs[i].weight.device}, device of input: {input[i].device}")
-                t_output = self.projs[i](input[i].to(self.proj_type))
+                # print(f"device of proj: {self.projs[i].weight.device}, device of input: {input[i].device}")
+                if t_output is None:
+                    t_output = self.projs[i](input[i])
+                else:
+                    t_output += self.projs[i](input[i])
+        return t_output
 
 def bench_linear(quant_mode: str, device: str):
     with torch.inference_mode(mode=True):
@@ -75,7 +83,7 @@ def bench_linear(quant_mode: str, device: str):
         else:
             assert(False)
 
-        input = torch.randn((layer_num, qlen, input_size), dtype=torch.bfloat16, device = "cuda").to(device).contiguous()
+        input = torch.randn((layer_num, qlen, input_size), dtype=proj_type, device = "cuda").to(device).contiguous()
 
         model = simple_linear(layer_num, input_size, output_size, quant_mode, proj_type, device)
         model = model.eval().to(device)
@@ -83,11 +91,13 @@ def bench_linear(quant_mode: str, device: str):
         
         # warm up
         for i in range(warm_up_iter//layer_num):
-            model(input)
+            with torch.inference_mode():
+                output = model(input)
         # test
         start = time.perf_counter()
         for i in range(test_iter//layer_num):
-            model(input)
+            with torch.inference_mode():
+                output = model(input)
         end = time.perf_counter()
         total_time = end - start
         print("device: ", device, end=";")
@@ -101,9 +111,9 @@ def bench_linear(quant_mode: str, device: str):
 bench_linear("fp32", "cpu")
 bench_linear("fp16", "cpu")
 bench_linear("bf16", "cpu")
-bench_linear("qint8", "cpu")
+# bench_linear("qint8", "cpu")
 
 bench_linear("fp32", "cuda")
 bench_linear("fp16", "cuda")
 bench_linear("bf16", "cuda")
-bench_linear("qint8", "cuda")
+# bench_linear("qint8", "cuda")

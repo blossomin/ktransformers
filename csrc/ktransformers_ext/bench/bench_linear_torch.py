@@ -42,7 +42,7 @@ def bench_linear(quant_mode: str, device: str):
 
         projs = []
         for _ in range(layer_num):
-            proj = torch.randn((output_size, input_size), dtype = torch.float32, device = "cuda").to(device).contiguous()
+            proj = torch.randn((output_size, input_size), dtype = torch.float32, device = device).contiguous()
             if quant_mode == "qint8":
                 proj_q = torch.quantize_per_tensor(proj, scale, zero_point, torch.qint8)
                 quantized_layer = nnq.Linear(input_size, output_size)
@@ -51,7 +51,7 @@ def bench_linear(quant_mode: str, device: str):
                 projs.append(quantized_layer)
             else:
                 projs.append(proj.to(proj_type))
-        input = torch.randn((layer_num, qlen, input_size), dtype=torch.bfloat16, device = "cuda").to(device).contiguous()
+        input = torch.randn((layer_num, qlen, input_size), dtype=torch.bfloat16, device = device).contiguous()
 
         # warm up
         for i in range(warm_up_iter):

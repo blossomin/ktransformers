@@ -18,7 +18,7 @@ import torch
 import intel_extension_for_pytorch as ipex
 
 
-
+batch_size = 16
 layer_num = 10
 kv_head_num = 8
 q_head_num = 32
@@ -49,12 +49,12 @@ def bench_linear(cache_seqlen: int, device):
 
         for layer_idx in range(layer_num):
             k_cache = torch.randn(
-                (1, 32, cache_seqlen, head_dim),
+                (batch_size, 32, cache_seqlen, head_dim),
                 dtype=torch.float16,
                 device=device,
             ).contiguous()
             v_cache = torch.randn(
-                (1, 32, cache_seqlen, head_dim),
+                (batch_size, 32, cache_seqlen, head_dim),
                 dtype=torch.float16,
                 device=device,
             ).contiguous()
@@ -62,7 +62,7 @@ def bench_linear(cache_seqlen: int, device):
             kvcaches.append((k_cache, v_cache))
 
         input = torch.randn(
-            (1, q_head_num, 1, head_dim), dtype=torch.float16, device=device
+            (batch_size, q_head_num, 1, head_dim), dtype=torch.float16, device=device
         ).contiguous()
         input = input / 100
 
@@ -72,13 +72,16 @@ def bench_linear(cache_seqlen: int, device):
         # model = ipex.optimize(model, dtype=torch.bfloat16)
         
         # warm up
+        # warm up
         for i in range(warm_up_iter//layer_num):
-            model(input, kvcaches)
+            with torch.inference_mode():
+                output = model(input, kvcaches)
 
         # test
         start = time.perf_counter()
         for i in range(test_iter//layer_num):
-            model(input, kvcaches)
+            with torch.inference_mode():
+                output = model(input, kvcaches)
         end = time.perf_counter()
         total_time = end - start
         print("device: ", device, end=";")
@@ -89,6 +92,7 @@ def bench_linear(cache_seqlen: int, device):
         print(
             "Bandwidth: ",
             cache_seqlen
+            * batch_size
             * q_head_num
             * head_dim
             * 2
